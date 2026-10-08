@@ -9,16 +9,20 @@ from math import pi
 # "classical" (standard) or "modified" (Craig) DH.
 CONVENTION = "classical"
 
-# One row per joint, joint 1 first. theta_i = q_i + theta_offset, where q_i is the
-# joint value reported in /joint_states. Frame 0 is base_link. The last frame has
-# its origin at end_effector_link and its z axis along the marker.
+# One row per joint, joint 1 first, with the lecture's columns (theta, d, a, alpha).
+# theta_i = q_i + theta_offset, where q_i is the joint value reported in
+# /joint_states. Frame 0 is base_link. The last frame has its origin at
+# end_effector_link and its z axis along the marker.
+# For each intermediate frame (a fixed transform with no joint of its own), insert a row
+# with "fixed": True at its position in the chain. Its theta is theta_offset alone.
 DH = [
-    {"alpha": None, "a": None, "d": None, "theta_offset": None},  # joint 1
-    {"alpha": None, "a": None, "d": None, "theta_offset": None},  # joint 2
-    {"alpha": None, "a": None, "d": None, "theta_offset": None},  # joint 3
-    {"alpha": None, "a": None, "d": None, "theta_offset": None},  # joint 4
-    {"alpha": None, "a": None, "d": None, "theta_offset": None},  # joint 5
-    {"alpha": None, "a": None, "d": None, "theta_offset": None},  # joint 6
+    {"theta_offset": None, "d": None, "a": None, "alpha": None},  # joint 1
+    {"theta_offset": None, "d": None, "a": None, "alpha": None},  # joint 2
+    {"theta_offset": None, "d": None, "a": None, "alpha": None},  # joint 3
+    {"theta_offset": None, "d": None, "a": None, "alpha": None},  # joint 4
+    {"theta_offset": None, "d": None, "a": None, "alpha": None},  # joint 5
+    {"theta_offset": None, "d": None, "a": None, "alpha": None},  # joint 6
+    # {"theta_offset": 0, "d": 0.1, "a": 0, "alpha": 0, "fixed": True},  # example
 ]
 
 # Your three key poses: joint values q1 to q6 in radians, as in /joint_states.

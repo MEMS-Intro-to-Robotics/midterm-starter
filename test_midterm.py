@@ -206,7 +206,9 @@ COURSE_POSES = {
 }
 MIN_POSE_DIFFERENCE = 0.1  # rad, largest single-joint difference
 
-DH_KEYS = ("alpha", "a", "d", "theta_offset")
+DH_KEYS = ("theta_offset", "d", "a", "alpha")  # the lecture's (theta, d, a, alpha) columns
+FIXED_KEY = "fixed"  # marks an intermediate frame: a row with no joint variable
+JOINT_COUNT = 6
 CONVENTIONS = {"classical": "classical", "standard": "classical", "modified": "modified"}
 KINEMATICS_NAMES = ("CONVENTION", "DH", "KEY_POSES", "JACOBIAN_POSE", "JACOBIAN")
 
@@ -217,12 +219,12 @@ class _NotAValue(ValueError):
 
 def _value(node: ast.AST) -> object:
     """Evaluate a literal written in kinematics.py without running the file: numbers,
-    strings, lists, tuples, dicts, + - * /, [x] * n, pi (also math.pi and np.pi), and
+    True and False, strings, lists, tuples, dicts, + - * /, [x] * n, pi (also math.pi and np.pi), and
     np.array(...) around a literal."""
     if isinstance(node, ast.Constant):
         if node.value is None:
             raise _NotAValue(f"line {node.lineno} still has None; fill in the value")
-        if isinstance(node.value, (int, float, str)) and not isinstance(node.value, bool):
+        if isinstance(node.value, (bool, int, float, str)):
             return node.value
     elif isinstance(node, ast.Name) and node.id == "pi":
         return math.pi
@@ -267,8 +269,12 @@ def _value(node: ast.AST) -> object:
     )
 
 
+def _is_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def _number(value: object, node: ast.AST) -> float:
-    if isinstance(value, (int, float)) and math.isfinite(value):
+    if _is_number(value) and math.isfinite(value):
         return float(value)
     raise _NotAValue(f"line {node.lineno} needs a number here, not {value!r}")
 
@@ -345,7 +351,7 @@ def gen3_lite_fk(q: list[float]) -> list[list[float]]:
 def _joint_vector(name: str, value: object) -> tuple[list[float] | None, str | None]:
     if not isinstance(value, (list, tuple)) or len(value) != 6:
         return None, f"key pose '{name}' needs six joint values, q1 to q6."
-    if not all(isinstance(x, (int, float)) for x in value):
+    if not all(_is_number(x) for x in value):
         return None, f"key pose '{name}' has a value that is not a number."
     q = [float(x) for x in value]
     for index, (angle, limit) in enumerate(zip(q, JOINT_LIMITS), start=1):
@@ -410,23 +416,39 @@ def check_key_poses(key_poses: object) -> list[str]:
     return errors
 
 
+def is_fixed_row(row: dict[str, object]) -> bool:
+    return row.get(FIXED_KEY) is True
+
+
+def check_dh(dh: object) -> list[str]:
+    """One row per joint, in order, plus any intermediate frames marked "fixed": True."""
+    if not isinstance(dh, list) or not dh:
+        return ["DH must be a list of rows, one per joint, joint 1 first."]
+    errors: list[str] = []
+    for index, row in enumerate(dh, start=1):
+        if not isinstance(row, dict) or not set(DH_KEYS) <= set(row) <= set(DH_KEYS) | {FIXED_KEY}:
+            errors.append(f"DH row {index} must have the keys " + ", ".join(DH_KEYS)
+                          + f', and "{FIXED_KEY}": True only for an intermediate frame.')
+        elif not all(_is_number(row[key]) for key in DH_KEYS):
+            errors.append(f"DH row {index} has a value that is not a number.")
+        elif FIXED_KEY in row and not isinstance(row[FIXED_KEY], bool):
+            errors.append(f'DH row {index}: "{FIXED_KEY}" must be True or False.')
+    if not errors:
+        joints = sum(1 for row in dh if not is_fixed_row(row))
+        if joints != JOINT_COUNT:
+            errors.append(f"DH has {joints} joint rows; the Gen3 Lite has {JOINT_COUNT} joints. "
+                          f'Mark each intermediate frame with "{FIXED_KEY}": True.')
+    return errors
+
+
 def check_kinematics_file(values: dict[str, object]) -> list[str]:
     errors: list[str] = []
     convention = values.get("CONVENTION")
     if "CONVENTION" in values and str(convention).strip().lower() not in CONVENTIONS:
         errors.append("CONVENTION must be \"classical\" or \"modified\".")
 
-    dh = values.get("DH")
     if "DH" in values:
-        if not isinstance(dh, list) or len(dh) != 6:
-            errors.append("DH must be a list of six rows, one per joint.")
-        else:
-            for index, row in enumerate(dh, start=1):
-                if not isinstance(row, dict) or set(row) != set(DH_KEYS):
-                    errors.append(f"DH row {index} must have exactly the keys "
-                                  + ", ".join(DH_KEYS) + ".")
-                elif not all(isinstance(row[key], (int, float)) for key in DH_KEYS):
-                    errors.append(f"DH row {index} has a value that is not a number.")
+        errors.extend(check_dh(values["DH"]))
 
     if "KEY_POSES" in values:
         errors.extend(check_key_poses(values["KEY_POSES"]))
@@ -441,7 +463,7 @@ def check_kinematics_file(values: dict[str, object]) -> list[str]:
                 and all(isinstance(row, list) and len(row) == 6 for row in jacobian)):
             errors.append("JACOBIAN must be 6 rows of 6 numbers (rows vx, vy, vz, wx, wy, wz; "
                           "columns joints 1 to 6).")
-        elif not all(isinstance(x, (int, float)) for row in jacobian for x in row):
+        elif not all(_is_number(x) for row in jacobian for x in row):
             errors.append("JACOBIAN has a value that is not a number.")
     return errors
 

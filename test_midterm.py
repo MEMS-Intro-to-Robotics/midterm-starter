@@ -210,7 +210,10 @@ DH_KEYS = ("theta_offset", "d", "a", "alpha")  # the lecture's (theta, d, a, alp
 FIXED_KEY = "fixed"  # marks an intermediate frame: a row with no joint variable
 JOINT_COUNT = 6
 CONVENTIONS = {"classical": "classical", "standard": "classical", "modified": "modified"}
-KINEMATICS_NAMES = ("CONVENTION", "DH", "KEY_POSES", "JACOBIAN_POSE", "JACOBIAN")
+# CONVENTION is optional and not in the handout: the lecture teaches the classical
+# form only, which is the default. "modified" is accepted for students who use it.
+REQUIRED_NAMES = ("DH", "KEY_POSES", "JACOBIAN_POSE", "JACOBIAN")
+KINEMATICS_NAMES = ("CONVENTION",) + REQUIRED_NAMES
 
 
 class _NotAValue(ValueError):
@@ -303,7 +306,7 @@ def load_kinematics(repo: Path) -> tuple[dict[str, object], list[str]]:
                 values[name] = _value(statement.value)
             except _NotAValue as exc:
                 errors.append(f"kinematics.py, {name}: {exc}.")
-    missing = [name for name in KINEMATICS_NAMES if name not in values]
+    missing = [name for name in REQUIRED_NAMES if name not in values]
     missing = [name for name in missing if not any(error.startswith(f"kinematics.py, {name}:")
                                                    for error in errors)]
     if missing:

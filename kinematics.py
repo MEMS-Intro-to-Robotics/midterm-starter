@@ -6,9 +6,6 @@ and angles in radians. Replace every None.
 """
 from math import pi
 
-# "classical" (standard) or "modified" (Craig) DH.
-CONVENTION = "classical"
-
 # One row per joint, joint 1 first, with the lecture's columns (theta, d, a, alpha).
 # theta_i = q_i + theta_offset, where q_i is the joint value reported in
 # /joint_states. Frame 0 is base_link. The last frame has its origin at
